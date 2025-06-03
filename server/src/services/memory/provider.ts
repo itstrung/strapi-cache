@@ -7,6 +7,7 @@ import { loggy } from '../../utils/log';
 export class InMemoryCacheProvider implements CacheProvider {
   private initialized = false;
   private provider!: LRUCache<string, any>;
+  private cacheGetTimeoutInMs: number;
 
   constructor(private strapi: Core.Strapi) {}
 
@@ -23,12 +24,15 @@ export class InMemoryCacheProvider implements CacheProvider {
     const size = Number(this.strapi.plugin('strapi-cache').config('size'));
     const allowStale = Boolean(this.strapi.plugin('strapi-cache').config('allowStale'));
 
+
     this.provider = new LRUCache({
       max,
       ttl,
       size,
       allowStale,
     });
+
+    this.cacheGetTimeoutInMs = Number(this.strapi.plugin('strapi-cache').config('cacheGetTimeoutInMs'));
 
     loggy.info('Provider initialized');
   }
@@ -45,13 +49,12 @@ export class InMemoryCacheProvider implements CacheProvider {
   async get(key: string): Promise<any | null> {
     if (!this.ready) return null;
 
-    const timeout = 1000;
     return withTimeout(
       () =>
         new Promise((resolve) => {
           resolve(this.provider.get(key));
         }),
-      timeout
+      this.cacheGetTimeoutInMs
     ).catch((error) => {
       loggy.error(`Error during get: ${error?.message || error}`);
       return null;
